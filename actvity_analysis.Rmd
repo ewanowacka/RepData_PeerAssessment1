@@ -1,0 +1,128 @@
+---
+title: "PA1_template"
+author: "Ewa Nowacka"
+date: "October 19, 2016"
+output: html_document
+---
+
+This document shows the analysis of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+The variables included in this dataset are:  
+* **steps**: Number of steps taking in a 5-minute interval (missing values are coded as NA)  
+* **date**: The date on which the measurement was taken in YYYY-MM-DD format  
+* **interval**: Identifier for the 5-minute interval in which measurement was taken  
+
+#Loading and preprocessing the data
+First, after seting up our working directory, we will load the data which is stored in csv file.
+```{r,echo=TRUE}
+activity<-read.csv(file="activity.csv",header=TRUE,sep=",")
+```
+Let's take a quick look at our data. First, we will check how few first rows look like using `head()` function.
+```{r,echo=TRUE}
+head(activity)
+```
+It would also good to know how our data is distributed. For this purpose we will need `summary()` function.
+```{r,echo=TRUE}
+summary(activity)
+```
+
+# What is mean total number of steps taken per day?
+That was really cool! So let's now calculate something...Maybe the total number of steps taken per day?
+```{r,echo=TRUE}
+total_steps<-aggregate(steps~date,activity,sum)
+head(total_steps)
+```
+The `aggregate` function is not the only way to do it. There is also famous and very useful `tapply` function. We should obtain the same data set regardless the method we use. Let's quicky check that it is the truth indeed.
+```{r,echo=TRUE}
+total_steps2<-with(activity,tapply(steps,date,FUN=sum))
+head(total_steps2)
+```
+As we see the numbers are the same, but the output format is different. `tapply()` function returns matrix/array while `aggregate` returns data frame. Since I personally prefer working with data frames, I will use `aggregate()` function for my analysis.
+I would like to know what is the distribution of the total numbers of steps. First, I will take a look at the variable's histogram.
+```{r,echo=TRUE}
+options(width=200)
+hist(total_steps$steps,main="Histogram for total number of steps per day",xlab="Total number of steps per day",border="black",col="green")
+```
+```{r,echo=FALSE}
+cat(" ")
+```
+I wonder how the density function for the total number of steps would look like. I will check it with `lines()` funtcion.
+```{r,echo=TRUE}
+options(width=200)
+hist(total_steps$steps,main="Histogram for total number of steps per day",prob=TRUE,xlab="Total number of steps per day",border="black",col="green")
+lines(density(total_steps$steps))
+```
+```{r,echo=FALSE}
+cat(" ")
+```
+Now let's create a vector called **summary_total** where we will store mean and median of total number of steps.
+```{r,echo=TRUE}
+summary_total<-c(mean(total_steps$steps),median(total_steps$steps))
+names(summary_total)<-c("mean","median")
+summary_total
+```
+Hence, the mean of total number of steps per day is `r format(round(summary_total[1],2),scientific=F)` and the median is `r format(round(summary_total[2],2),scientific=F)`.
+
+# What is the average daily activity pattern?
+Now we will analyze the average daily activity pattern.
+```{r,echo=TRUE}
+average_steps<-aggregate(steps~interval,activity,mean,na.rm=TRUE)
+plot_avg<-with(average_steps,plot(interval,steps,type="l",xlab="5 min time intervals", ylab="Average number of steps"))
+max_val<-max(average_steps$steps)
+max_val
+average_steps[which(average_steps$steps==max_val),]
+```
+Hence the above results, the maximum number of steps, which is `r format(max_val,scientific=F)`,  we can find in interval 835.  
+
+# Imputing missing values
+Now it is time to take care of **missing values**. How many are they and how can we get rid of them?
+```{r,echo=TRUE}
+sum(is.na(activity))
+activity_noNa<-activity
+
+for (i in 1:nrow(activity_noNa)){
+  if(is.na(activity_noNa[i,]$steps)){
+    activity_noNa[i,]$steps<-average_steps[which(average_steps$interval==activity_noNa[i,]$interval),]$steps
+  }
+}
+head(activity_noNa)
+sum(is.na(activity_noNa))
+```
+It seems that all NA-s have been replaced and the new data set looks reasonable. Now, let's make a histogram of the total number of steps taken each day and calculate and report the mean and median total number of steps taken per day using our new data set.
+```{r,echo=TRUE}
+head(activity_noNa)
+total_steps_noNA<-aggregate(steps~date,activity_noNa,sum)
+hist(total_steps_noNA$steps,main="Histogram for total number of steps per day",xlab="Total number of steps per day",border="black",col="green")
+summary_noNa<-c(mean(total_steps_noNA$steps),median(total_steps_noNA$steps))
+names(summary_noNa)<-c("mean","median")
+summary_noNa
+```
+As we see we have obtained different number this time and what is more, the mean and the median are equal.
+
+# Are there differences in activity patterns between weekdays and weekends?
+```{r,echo=TRUE}
+day_type<-function(x)
+  {
+  if (weekdays(x) %in% c("Saturday","Sunday"))
+  {
+   return("Weekend")
+  }
+  else{
+    return ("Weekday")
+  }
+} 
+day_type(as.Date("10/12/2016"))
+activity_noNa$dayT<-sapply(as.Date(activity_noNa$date),function(x) day_type(x))
+activity_noNa <- transform(activity_noNa, dayT = as.factor(dayT))
+table(activity_noNa$dayT)
+```
+Now,we will make a plot containing a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). For this purpose, we will use **lattice** package.
+```{r,echo=TRUE}
+week_data<-aggregate(steps~interval+dayT,activity_noNa,mean)
+
+head(week_data)
+week_data <- transform(week_data, dayT = as.factor(dayT))
+library(lattice)
+attach(week_data)
+xyplot(steps~interval|dayT,layout=c(1,2),type="l")
+```
